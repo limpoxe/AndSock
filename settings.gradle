@@ -1,0 +1,3 @@
+rootProject.name = "AndSock"
+include ':app'
+include ':library'

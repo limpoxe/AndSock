@@ -83,3 +83,14 @@ lint/generated/
 lint/outputs/
 lint/tmp/
 # lint/reports/
+
+/.idea/misc.xml
+.idea/
+.DS_Store
+/build
+.settings
+build-cache
+build-cache.lock
+/dump.txt
+dump.txt
+
