@@ -6,11 +6,12 @@ import java.net.ServerSocket;
 
 public class SocketFactory {
     private static final String TAG = "SocketFactory";
+    private static final Object sLock = new Object();
     private static ServerSocket serverSocket;
 
     public static java.net.Socket newSocket(String mode, String ip, int port) throws IOException {
         if (Socket.Options.MODE_SERVER.equals(mode)) {
-            synchronized (SocketFactory.class) {
+            synchronized (sLock) {
                 if (serverSocket == null || serverSocket.isClosed()) {
                     LogUtil.log(TAG, "new ServerSocket " + ip + ":" + port);
                     serverSocket = new ServerSocket(port, 50, InetAddress.getByName(ip));
@@ -25,7 +26,7 @@ public class SocketFactory {
     }
 
     public static void close() {
-        synchronized (SocketFactory.class) {
+        synchronized (sLock) {
             if (serverSocket != null && !serverSocket.isClosed()) {
                 try {
                     LogUtil.log(TAG, "close ServerSocket");

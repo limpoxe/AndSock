@@ -11,7 +11,6 @@ import com.limpoxe.andsock.Packet;
 import com.limpoxe.andsock.Socket;
 
 public class MainActivity extends AppCompatActivity {
-
     private static Socket client = null;
     private static Socket server = null;
 
@@ -32,7 +31,16 @@ public class MainActivity extends AppCompatActivity {
                     serverOptions.port = 9527;
                     serverOptions.heartbeatDelay = 0;
                     server = new Socket(serverOptions);
-                    server.connect();
+                    server.registerConnectStateChange(new Socket.ConnectStateListener() {
+                        @Override
+                        public void onConnect() {
+                            System.out.println("Server-Side: onConnect");
+                        }
+                        @Override
+                        public void onDisconnect() {
+                            System.out.println("Server-Side: onDisconnect");
+                        }
+                    });
                     server.registerReqListener(new Socket.Req() {
                         @Override
                         public void onReqArrive(Packet req) {
@@ -42,6 +50,7 @@ public class MainActivity extends AppCompatActivity {
                             server.ack(req.id, str.getBytes());
                         }
                     });
+                    server.connect();
                 }
                 if (client == null) {
                     Socket.Options clientOptions = new Socket.Options();
@@ -50,6 +59,16 @@ public class MainActivity extends AppCompatActivity {
                     clientOptions.port = 9527;
                     clientOptions.heartbeatDelay = 5000;
                     client = new Socket(clientOptions);
+                    client.registerConnectStateChange(new Socket.ConnectStateListener() {
+                        @Override
+                        public void onConnect() {
+                            System.out.println("Client-Side: onConnect");
+                        }
+                        @Override
+                        public void onDisconnect() {
+                            System.out.println("Client-Side: onDisconnect");
+                        }
+                    });
                     client.connect();
                 }
                 String str = "你好吗？";
@@ -67,5 +86,4 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
-
 }
