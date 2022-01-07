@@ -352,6 +352,10 @@ public class Socket {
         sendBuffer.clear();
     }
 
+    Socket fork() {
+        return new Socket(options);
+    }
+
     public static interface ConnectStateListener  {
         public void onConnect();
         public void onDisconnect();
