@@ -17,12 +17,16 @@ public class Packet {
 
     public Packet(int type, int id, byte[] data) {
         this.length = 4 + 1 + 4 + (data==null?0:data.length);
-        this.type = type;
+        if (Byte.MIN_VALUE <= type && type <= Byte.MAX_VALUE) {
+            this.type = type;
+        } else {
+            throw new IllegalArgumentException("type outOfRange: " + type);
+        }
         this.id = id;
         this.data = data;
 
         if (type != Packet.TYPE_REQ && type != Packet.TYPE_ACK) {
-            throw new Error("包类型错误");
+            throw new IllegalArgumentException("unknown type: " + type);
         }
     }
 
