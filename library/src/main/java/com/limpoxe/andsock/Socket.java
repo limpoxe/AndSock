@@ -1,7 +1,6 @@
 package com.limpoxe.andsock;
 
 import java.io.ByteArrayOutputStream;
-import java.io.IOException;
 import java.util.HashMap;
 import java.util.LinkedList;
 import java.util.Map;
@@ -30,8 +29,8 @@ public class Socket {
     public Socket(Options options) {
         this.options = options;
         this.TimerThread = Executors.newSingleThreadScheduledExecutor(new SoThreadFactory(options.mode + "-Timer"));
-        this.ReadThread = new ExcutorThread(options.mode + "-Read");
-        this.WriteThread = new ExcutorThread(options.mode + "-Write");
+        this.ReadThread = new ExcutorThread(options.mode + "-" + options.protocol + "-Read");
+        this.WriteThread = new ExcutorThread(options.mode + "-" + options.protocol + "-Write");
         this.manager = new Manager(this, TimerThread, options);
     }
 
@@ -44,7 +43,7 @@ public class Socket {
                     LogUtil.log(TAG, "already connected, trigger onConnect callback");
                     manager.onConnect();
                 } else {
-                    Engine engine = newEngine();
+                    Engine engine = EngineFactory.newEngine(options);
                     if (engine.open()) {
                         sid++;
                         LogUtil.log(TAG, "Engine opened, sid=" + sid);
@@ -66,7 +65,8 @@ public class Socket {
 
                         sendBuffer();
                     } else {
-                        LogUtil.log(TAG, "Engine open fail");
+                        sid++;
+                        LogUtil.log(TAG, "Engine open failed, sid=" + sid);
                         LogUtil.log(TAG, "trigger onDisconnect callback");
                         manager.onDisconnect();
                     }
@@ -76,29 +76,32 @@ public class Socket {
         return this;
     }
 
-    private Engine newEngine() {
-        return new EngineImpl(options.mode, options.ip, options.port);
-    }
-
     private void read() {
         ReadThread.exec(new Runnable() {
             @Override
             public void run() {
                 LogUtil.log(TAG, "Packet read thread started");
                 ByteArrayOutputStream bos = new ByteArrayOutputStream();
-                byte[] buf = new byte[1];
-                int lengh = 0;
-                while (mEngine.read(buf, 0, 1) != -1) {
+                byte[] buf = new byte[mEngine.getReadBufferLen()];
+                int dataLen = 0;
+                int readLen = 0;
+                while ((readLen = mEngine.read(buf, 0, buf.length)) != -1) {
                     try {
-                        bos.write(buf);
-                        if (bos.size() == 4) {
-                            lengh = ByteOrder.byte4ToIntB(bos.toByteArray());
+                        bos.write(buf, 0, readLen);
+                        if (dataLen == 0 && bos.size() >= 4) {
+                            dataLen = ByteOrder.byte4ToIntB(bos.toByteArray());
                         }
-                        if (lengh != 0 && bos.size() == lengh) {
+                        if (dataLen != 0 && bos.size() >= dataLen) {
                             LogUtil.log(TAG, "Packet arrived ");
-                            Packet packet = Packet.unpack(bos.toByteArray());
+                            byte[] packetBytes = bos.toByteArray();
+                            if (packetBytes.length > dataLen) {
+                                byte[] packetBytesTemp = new byte[dataLen];
+                                System.arraycopy(packetBytes, 0, packetBytesTemp, 0, dataLen);
+                                packetBytes = packetBytesTemp;
+                            }
+                            Packet packet = Packet.unpack(packetBytes);
                             bos.reset();
-                            lengh = 0;
+                            dataLen = 0;
 
                             if (packet != null) {
                                 if (packet.type == Packet.TYPE_REQ) {
@@ -110,7 +113,7 @@ public class Socket {
                                 LogUtil.log(TAG, "Packet unpack fail，should not happen！ ");
                             }
                         }
-                    } catch (IOException e) {
+                    } catch (Exception e) {
                         e.printStackTrace();
                         LogUtil.log(TAG, "ReadThread IOException ");
                     }
@@ -142,7 +145,7 @@ public class Socket {
                 LogUtil.log(TAG, "call onAckArrive cause exception: " + e.getMessage());
             }
         } else {
-            LogUtil.log(TAG, "no ack callback, ignore!");
+            LogUtil.log(TAG, "id=" + packet.id + ", no ack callback, ignore!");
         }
     }
 
@@ -150,17 +153,16 @@ public class Socket {
         WriteThread.exec(new Runnable() {
             @Override
             public void run() {
-                //原则上packetSeqId自行自增即可
-                //这里通过请求的id修正1次是为了在日志中看起来id更连贯
-                if (packetSeqId < lastReqSeqId) {
-                    packetSeqId = lastReqSeqId + 1;
-                }
                 LogUtil.log(TAG, "send req, id=" + packetSeqId);
                 Packet packet = new Packet(Packet.TYPE_REQ, packetSeqId, data);
                 if (ack != null) {
                     Socket.this.acks.put(packetSeqId, ack);
                 }
-                packetSeqId++;
+                if (packetSeqId == Integer.MAX_VALUE) {
+                    packetSeqId = 0;
+                } else {
+                    packetSeqId++;
+                }
 
                 if (Socket.this.connected) {
                     write(packet);
@@ -276,7 +278,7 @@ public class Socket {
         LogUtil.log(TAG, "write, packet=" + packet);
         byte[] pak = Packet.pack(packet);
         if (pak != null && pak.length > 0) {
-            boolean ret = mEngine.write(pak);
+            boolean ret = mEngine.write(pak, 0, pak.length);
             if (!ret) {
                 LogUtil.log(TAG, "write packet fail");
                 LogUtil.log(TAG, "try disconnect");
@@ -317,8 +319,17 @@ public class Socket {
         return this.connected;
     }
 
+    public int getSid() {
+        return this.sid;
+    }
+
     public Socket registerConnectStateChange(ConnectStateListener listener) {
         manager.registerConnectStateChange(listener);
+        return this;
+    }
+
+    public Socket registerHeartBeatListener(HeartBeatListener listener) {
+        manager.registerHeartBeatListener(listener);
         return this;
     }
 
@@ -352,13 +363,18 @@ public class Socket {
         sendBuffer.clear();
     }
 
-    Socket fork() {
+    public Socket fork() {
         return new Socket(options);
     }
 
     public static interface ConnectStateListener  {
         public void onConnect();
         public void onDisconnect();
+    }
+
+    public static interface HeartBeatListener {
+        public void onBeat();
+        public void onTimeout();
     }
 
     public static interface Req {
@@ -374,14 +390,22 @@ public class Socket {
         public static final String MODE_SERVER = "Server";
         public static final String MODE_CLIENT = "Client";
 
-        //服务端模式还是客户端模式
-        public String mode = MODE_SERVER;
-        //ip
+        public static final String PROTOCOL_TCP = "TCP";
+        public static final String PROTOCOL_UDP_MULTICAST = "UDP_MULTICAST";
+        public static final String PROTOCOL_UDP_CAST = "UDP_CAST";
+
         public String ip = null;
-        //端口
-        public int port = 0;
+        //本地监听端口
+        public int localPort = 0;
+        //远程监听端口
+        public int remotePort = 0;
         //超时时间：发送req包超时，发送ack包超时，等待ack包超时
         public long packetTimeout = 15 * 1000;
+        //tcp or udp
+        public String protocol = PROTOCOL_TCP;
+        public int udpBufferSize = 1500 - 20 - 8;
+        //服务端模式还是客户端模式
+        public String mode = MODE_SERVER;
         //连接失败时每隔一段时间自动重试, 0表示不自动重连
         public long autoConnectDelay = 5 * 1000;
         //自动重连最大次数，0表示不限
@@ -390,11 +414,10 @@ public class Socket {
         public long heartbeatDelay = 30 * 1000;
         //心跳连续超时次数超过最大次数则断开连接
         public int heartbeatTimeoutMaxTimes = 3;
-        //自定义心跳包
         public byte[] heartbeatReq;
-        //自定义心跳回包
         public byte[] heartbeatAck;
         public Options() {
         }
     }
 }
+

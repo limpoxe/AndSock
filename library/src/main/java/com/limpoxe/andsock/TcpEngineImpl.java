@@ -5,26 +5,28 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.Socket;
 
-public class EngineImpl implements Engine {
-    private static final String TAG = "EngineImpl";
+public class TcpEngineImpl implements Engine {
+    private static final String TAG = "TcpEngineImpl";
 
     private final String mode;
     private final String ip;
-    private final int port;
+    private final int localPort;
+    private final int remotePort;
 
     private Socket socket;
     private InputStream inputStream;
     private OutputStream outputStream;
 
-    public EngineImpl(String mode, String ip, int port) {
+    public TcpEngineImpl(String mode, String ip, int localPort, int remotePort) {
         this.mode = mode;
         this.ip = ip;
-        this.port = port;
+        this.localPort = localPort;
+        this.remotePort = remotePort;
     }
 
     public boolean open() {
         try {
-            socket = SocketFactory.newSocket(mode, ip, port);
+            socket = SocketFactory.newSocket(mode, ip, localPort, remotePort);
             socket.setKeepAlive(true);
             socket.setSoTimeout(0);
             socket.setTcpNoDelay(true);
@@ -62,11 +64,6 @@ public class EngineImpl implements Engine {
         }
     }
 
-    @Override
-    public boolean write(byte[] b) {
-        return write(b, 0, b.length);
-    }
-
     public boolean write(byte b[], int off, int len) {
         try {
             if (outputStream != null) {
@@ -89,5 +86,10 @@ public class EngineImpl implements Engine {
             LogUtil.log(TAG, " read fail " + e.getMessage());
         }
         return -1;
+    }
+
+    @Override
+    public int getReadBufferLen() {
+        return 1;
     }
 }

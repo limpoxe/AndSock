@@ -1,6 +1,5 @@
 package com.limpoxe.andsock;
 
-
 import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
@@ -108,17 +107,15 @@ public class Emitter {
      *
      * @param event an event name.
      * @param args
-     * @return a reference to this object.
+     * @return true if any listener handled this event
      */
     public boolean emit(String event, Object... args) {
-        boolean handled = false;
+        boolean handled=  false;
         ConcurrentLinkedQueue<Listener> callbacks = this.callbacks.get(event);
         if (callbacks != null) {
             for (Listener fn : callbacks) {
-                fn.call(args);
-            }
-            if (callbacks.size() > 0) {
                 handled = true;
+                fn.call(args);
             }
         }
         return handled;

@@ -26,7 +26,7 @@ public class Packet {
         this.data = data;
 
         if (type != Packet.TYPE_REQ && type != Packet.TYPE_ACK) {
-            throw new IllegalArgumentException("unknown type: " + type);
+            throw new Error("unknown type: " + type);
         }
     }
 

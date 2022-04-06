@@ -12,6 +12,7 @@ public class Manager {
     private final Socket.Options options;
     private Socket.Req req;
     private Socket.ConnectStateListener connectStateListener;
+    private Socket.HeartBeatListener heartBeatListener;
 
     private int pingTimeoutTimes;
     private ScheduledFuture pingScheduledFuture = null;
@@ -26,13 +27,20 @@ public class Manager {
                     public void onAckArrive(Packet ack) {
                         pingTimeoutTimes = 0;
                         LogUtil.log(TAG, "heartbeat success");
+                        if (heartBeatListener != null) {
+                            heartBeatListener.onBeat();
+                        }
                     }
                     @Override
                     public void onTimeout(Packet req) {
                         pingTimeoutTimes++;
                         LogUtil.log(TAG, "heartbeat timeout, count=" + pingTimeoutTimes);
+                        if (heartBeatListener != null) {
+                            heartBeatListener.onTimeout();
+                        }
                         if (pingTimeoutTimes >= options.heartbeatTimeoutMaxTimes) {
                             LogUtil.log(TAG, "heartbeatTimeoutMaxTimes=" + options.heartbeatTimeoutMaxTimes + ", try disconnect");
+                            pingTimeoutTimes = 0;
                             socket.disconnect();
                         }
                     }
@@ -42,13 +50,12 @@ public class Manager {
     };
 
     private volatile int autoConnectRetryTimes;
-    private ScheduledFuture connectScheduledFuture = null;
     private Runnable connectRunnable = new Runnable() {
         @Override
         public void run() {
             if (!socket.connected()) {
                 if (options.autoConnectRetryMaxTimes == 0 || autoConnectRetryTimes < options.autoConnectRetryMaxTimes) {
-                    LogUtil.log(TAG, options.mode + " disconnected, try connect[" + options.autoConnectDelay + "]");
+                    LogUtil.log(TAG, options.mode + " not connected, try connect[" + options.autoConnectDelay + "]" + autoConnectRetryTimes);
                     autoConnectRetryTimes++;
                     socket.connect();
                 }
@@ -64,6 +71,10 @@ public class Manager {
 
     void registerConnectStateChange(Socket.ConnectStateListener listener) {
         this.connectStateListener = listener;
+    }
+
+    void registerHeartBeatListener(Socket.HeartBeatListener listener) {
+        this.heartBeatListener = listener;
     }
 
     void unregisterConnectStateChange(Socket.ConnectStateListener listener) {
@@ -101,6 +112,9 @@ public class Manager {
         if (isHeartbeatReq(packet)) {
             LogUtil.log(TAG, "heartbeat, Auto-Ack!");
             socket.ack(packet.id, options.heartbeatAck);
+            if (heartBeatListener != null) {
+                heartBeatListener.onBeat();
+            }
         } else {
             if (req != null) {
                 try {
@@ -137,8 +151,8 @@ public class Manager {
     void onDisconnect() {
         LogUtil.log(TAG, "onDisconnect");
         //启动重连定时器
-        if (connectScheduledFuture == null && options.autoConnectDelay > 0) {
-            connectScheduledFuture = Timer.scheduleAtFixedRate(connectRunnable, options.autoConnectDelay, options.autoConnectDelay, TimeUnit.MILLISECONDS);
+        if (options.autoConnectDelay > 0) {
+            Timer.schedule(connectRunnable, options.autoConnectDelay, TimeUnit.MILLISECONDS);
         }
         if (connectStateListener != null) {
             try {
