@@ -10,9 +10,12 @@ import com.limpoxe.andsock.LogUtil;
 import com.limpoxe.andsock.Packet;
 import com.limpoxe.andsock.Socket;
 
+import org.json.JSONObject;
+
 public class MainActivity extends AppCompatActivity {
     private static Socket client = null;
     private static Socket server = null;
+    private static Socket scaner = null;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -28,7 +31,7 @@ public class MainActivity extends AppCompatActivity {
                     Socket.Options serverOptions = new Socket.Options();
                     serverOptions.mode = Socket.Options.MODE_SERVER;
                     serverOptions.ip = "127.0.0.1";
-                    serverOptions.port = 9527;
+                    serverOptions.localPort = 9527;
                     serverOptions.heartbeatDelay = 0;
                     server = new Socket(serverOptions);
                     server.registerConnectStateChange(new Socket.ConnectStateListener() {
@@ -56,7 +59,7 @@ public class MainActivity extends AppCompatActivity {
                     Socket.Options clientOptions = new Socket.Options();
                     clientOptions.mode = Socket.Options.MODE_CLIENT;
                     clientOptions.ip = "127.0.0.1";
-                    clientOptions.port = 9527;
+                    clientOptions.remotePort = 9527;
                     clientOptions.heartbeatDelay = 5000;
                     client = new Socket(clientOptions);
                     client.registerConnectStateChange(new Socket.ConnectStateListener() {
@@ -71,6 +74,38 @@ public class MainActivity extends AppCompatActivity {
                     });
                     client.connect();
                 }
+                if (scaner == null) {
+                    Socket.Options options = new Socket.Options();
+                    options.ip = "239.192.168.1";//239.0.0.0 ~ 239.255.255.255
+                    options.localPort = 5279;
+                    options.remotePort = 5279;
+                    options.protocol = Socket.Options.PROTOCOL_UDP_MULTICAST;
+                    options.heartbeatDelay = 0;
+                    options.autoConnectDelay = 0;
+                    options.udpBufferSize = 512;
+                    scaner = new Socket(options);
+                    scaner.registerReqListener(new Socket.Req() {
+                        @Override
+                        public void onReqArrive(Packet req) {
+                            try {
+                                String data = new String(req.data);
+                                JSONObject jsonObject = new JSONObject(data);
+                                String cmd = jsonObject.optString("cmd");
+                                if ("who".equals(cmd)) {
+                                    JSONObject response = new JSONObject();
+                                    response.put("cmd", "who_reply");
+                                    response.put("name", "Cindy");
+                                    scaner.send(response.toString().getBytes(), null);
+                                } else if ("who_reply".equals(cmd)) {
+                                    LogUtil.log("who_reply", "name=" + jsonObject.optString("name"));
+                                }
+                            } catch (Exception e) {
+                                e.printStackTrace();
+                            }
+                        }
+                    });
+                    scaner.connect();
+                }
                 String str = "你好吗？";
                 System.out.println("Req: " + str);
                 client.send(str.getBytes(), new Socket.Ack() {
@@ -83,6 +118,13 @@ public class MainActivity extends AppCompatActivity {
                         System.out.println("发包超时");
                     }
                 });
+                try {
+                    JSONObject jsonObject = new JSONObject();
+                    jsonObject.put("cmd", "who");
+                    scaner.send(jsonObject.toString().getBytes(), null);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
             }
         });
     }
