@@ -13,7 +13,7 @@ public class Manager {
     private final Socket socket;
     private final Socket.Options options;
     private Socket.Req req;
-    private Socket.Ack ack;
+    private Socket.Ack0 ack;
     private final Map<Integer, Socket.Ack> acks = new HashMap<>();
     private Socket.ConnectStateListener connectStateListener;
     private Socket.HeartBeatListener heartBeatListener;
@@ -96,11 +96,11 @@ public class Manager {
         this.req = null;
     }
 
-    void registerAckListener(Socket.Ack ackListener) {
+    void registerAckListener(Socket.Ack0 ackListener) {
         this.ack = ackListener;
     }
 
-    void unregisterAckListener(Socket.Ack ackListener) {
+    void unregisterAckListener(Socket.Ack0 ackListener) {
         this.ack = null;
     }
 

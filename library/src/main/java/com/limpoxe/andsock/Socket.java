@@ -320,12 +320,12 @@ public class Socket {
         return this;
     }
 
-    public Socket registerAckListener(Socket.Ack ackListener) {
+    public Socket registerAckListener(Socket.Ack0 ackListener) {
         manager.registerAckListener(ackListener);
         return this;
     }
 
-    public Socket unregisterAckListener(Socket.Ack ackListener) {
+    public Socket unregisterAckListener(Socket.Ack0 ackListener) {
         manager.unregisterAckListener(ackListener);
         return this;
     }
@@ -363,8 +363,11 @@ public class Socket {
         void onReqArrive(Packet req);
     }
 
-    public static interface Ack {
+    public static interface Ack0 {
         public void onAckArrive(Packet ack);
+    }
+
+    public static interface Ack extends Ack0 {
         public void onTimeout(Packet req);
     }
 
