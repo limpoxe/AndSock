@@ -73,12 +73,16 @@ public class Manager {
         this.connectStateListener = listener;
     }
 
+    void unregisterConnectStateChange(Socket.ConnectStateListener listener) {
+        this.connectStateListener = null;
+    }
+
     void registerHeartBeatListener(Socket.HeartBeatListener listener) {
         this.heartBeatListener = listener;
     }
 
-    void unregisterConnectStateChange(Socket.ConnectStateListener listener) {
-        this.connectStateListener = null;
+    void unregisterHeartBeatListener(Socket.HeartBeatListener listener) {
+        this.heartBeatListener = null;
     }
 
     void registerReqListener(Socket.Req reqListener) {

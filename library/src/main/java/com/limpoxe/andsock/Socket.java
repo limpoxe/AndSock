@@ -328,13 +328,18 @@ public class Socket {
         return this;
     }
 
+    public Socket unregisterConnectStateChange(ConnectStateListener listener) {
+        manager.unregisterConnectStateChange(listener);
+        return this;
+    }
+
     public Socket registerHeartBeatListener(HeartBeatListener listener) {
         manager.registerHeartBeatListener(listener);
         return this;
     }
 
-    public Socket unregisterConnectStateChange(ConnectStateListener listener) {
-        manager.unregisterConnectStateChange(listener);
+    public Socket unregisterHeartBeatListener(HeartBeatListener listener) {
+        manager.unregisterHeartBeatListener(listener);
         return this;
     }
 
