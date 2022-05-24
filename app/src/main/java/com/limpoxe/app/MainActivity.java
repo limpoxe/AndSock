@@ -72,7 +72,7 @@ public class MainActivity extends AppCompatActivity {
             clientOptions.mode = Socket.Options.MODE_CLIENT;
             clientOptions.ip = "127.0.0.1";
             clientOptions.remotePort = 9527;
-            clientOptions.heartbeatDelay = 5000;
+            clientOptions.heartbeatDelay = 20000;
             client = new Socket(clientOptions);
             client.registerConnectStateChange(new Socket.ConnectStateListener() {
                 @Override
@@ -106,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
                             JSONObject response = new JSONObject();
                             response.put("cmd", "who_reply");
                             response.put("name", "Cindy");
+                            //组播不支持回调，无ack参数
                             scaner.send(response.toString().getBytes(), null);
                         } else if ("who_reply".equals(cmd)) {
                             LogUtil.log("who_reply", "name=" + jsonObject.optString("name"));
@@ -132,14 +133,9 @@ public class MainActivity extends AppCompatActivity {
                     try {
                         String data = new String(req.data);
                         LogUtil.log("onReqArrive", "data=" + data);
-                        new Handler(Looper.getMainLooper()).postDelayed(new Runnable() {
-                            @Override
-                            public void run() {
-                                String str = "unicast message";
-                                System.out.println("send Req: " + str);
-                                unicast.send(str.getBytes(), null);
-                            }
-                        }, 5000);
+                        String str = "Ack unicast message";
+                        System.out.println("send Ack: " + str);
+                        unicast.ack(req.id, str.getBytes());
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -168,6 +164,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("cmd", "who");
+            //组播不支持回调，无ack参数
             scaner.send(jsonObject.toString().getBytes(), null);
         } catch (Exception e) {
             e.printStackTrace();
@@ -175,8 +172,19 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void test3() {
-        String str = "unicast message";
+        String str = "Req unicast message";
         System.out.println("send Req: " + str);
-        unicast.send(str.getBytes(), null);
+        unicast.send(str.getBytes(), new Socket.Ack() {
+            @Override
+            public void onAckArrive(Packet ack) {
+                String data = new String(ack.data);
+                LogUtil.log("onAckArrive", "data=" + data);
+            }
+            @Override
+            public void onTimeout(Packet req) {
+                String data = new String(req.data);
+                LogUtil.log("onTimeout", "data=" + data);
+            }
+        });
     }
 }
