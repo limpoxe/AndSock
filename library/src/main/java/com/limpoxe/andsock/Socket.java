@@ -1,9 +1,7 @@
 package com.limpoxe.andsock;
 
 import java.io.ByteArrayOutputStream;
-import java.util.HashMap;
 import java.util.LinkedList;
-import java.util.Map;
 import java.util.Queue;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
@@ -17,8 +15,7 @@ public class Socket {
     private volatile int sid = 0;
     private volatile boolean connected;
 
-    private final Map<Integer, Ack> acks = new HashMap<>();
-    private final Queue<Packet> sendBuffer = new LinkedList<>();
+    private final Queue<Packet> packetBuffer = new LinkedList<>();
     private final ExcutorThread ReadThread;
     private final ExcutorThread WriteThread;
     private final ScheduledExecutorService TimerThread;
@@ -135,18 +132,7 @@ public class Socket {
 
     private void onAck(Packet packet) {
         LogUtil.log(TAG, "Packet is ack, packet=" + packet);
-        Ack ack = acks.remove(packet.id);
-        if (ack != null) {
-            try {
-                LogUtil.log(TAG, "trigger ack callback");
-                ack.onAckArrive(packet);
-            } catch (Exception e) {
-                e.printStackTrace();
-                LogUtil.log(TAG, "call onAckArrive cause exception: " + e.getMessage());
-            }
-        } else {
-            LogUtil.log(TAG, "id=" + packet.id + ", no ack callback, ignore!");
-        }
+        manager.dispatchAckArrive(packet);
     }
 
     public Socket send(final byte[] data, final Ack ack) {
@@ -155,9 +141,7 @@ public class Socket {
             public void run() {
                 LogUtil.log(TAG, "send req, id=" + packetSeqId);
                 Packet packet = new Packet(Packet.TYPE_REQ, packetSeqId, data);
-                if (ack != null) {
-                    Socket.this.acks.put(packetSeqId, ack);
-                }
+                manager.addAck(packetSeqId, ack);
                 if (packetSeqId == Integer.MAX_VALUE) {
                     packetSeqId = 0;
                 } else {
@@ -171,7 +155,7 @@ public class Socket {
                     }
                 } else {
                     LogUtil.log(TAG, "add packet to buffer, packet=" + packet);
-                    Socket.this.sendBuffer.add(packet);
+                    Socket.this.packetBuffer.add(packet);
                     bufferAndAckTimeout(packet);
                 }
             }
@@ -182,7 +166,7 @@ public class Socket {
     private void sendBuffer() {
         //如果有缓存的数据包，将缓存的数据包都发出去
         Packet packet = null;
-        while ((packet = sendBuffer.poll()) != null) {
+        while ((packet = packetBuffer.poll()) != null) {
             LogUtil.log(TAG, "send buffered packet=" + packet);
             write(packet);
         }
@@ -200,7 +184,7 @@ public class Socket {
                     write(packet);
                 } else {
                     LogUtil.log(TAG, "add packet to buffer, packet=" + packet);
-                    Socket.this.sendBuffer.add(packet);
+                    Socket.this.packetBuffer.add(packet);
                     bufferTimeout(packet);
                 }
             }
@@ -215,16 +199,7 @@ public class Socket {
                 WriteThread.exec(new Runnable() {
                     @Override
                     public void run() {
-                        Ack ack = Socket.this.acks.remove(packet.id);
-                        if (ack != null) {
-                            LogUtil.log(TAG, "waiting for ack timeout[" + options.packetTimeout + "], packet=" + packet);
-                            try {
-                                ack.onTimeout(packet);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                LogUtil.log(TAG, "call onTimeout cause exception: " + e.getMessage());
-                            }
-                        }
+                        manager.dispatchAckTimeout(packet);
                     }
                 });
             }
@@ -238,7 +213,7 @@ public class Socket {
                 WriteThread.exec(new Runnable() {
                     @Override
                     public void run() {
-                        boolean ret = Socket.this.sendBuffer.remove(packet);
+                        boolean ret = Socket.this.packetBuffer.remove(packet);
                         if (ret) {
                             LogUtil.log(TAG, "waiting for sent ack timeout[" + options.packetTimeout + "], packet=" + packet);
                         }
@@ -255,19 +230,11 @@ public class Socket {
                 WriteThread.exec(new Runnable() {
                     @Override
                     public void run() {
-                        Ack ack = Socket.this.acks.remove(packet.id);
-                        boolean ret = Socket.this.sendBuffer.remove(packet);
-                        if (ack != null) {
+                        boolean ret = Socket.this.packetBuffer.remove(packet);
+                        if (ret) {
                             LogUtil.log(TAG, "waiting for ack timeout[" + options.packetTimeout + "], packet=" + packet);
-                            try {
-                                ack.onTimeout(packet);
-                            } catch (Exception e) {
-                                e.printStackTrace();
-                                LogUtil.log(TAG, "call onTimeout cause exception: " + e.getMessage());
-                            }
-                        } else if (ret) {
-                            LogUtil.log(TAG, "send req packet timeout, packet=" + packet);
                         }
+                        manager.dispatchAckTimeout(packet);
                     }
                 });
             }
@@ -353,6 +320,16 @@ public class Socket {
         return this;
     }
 
+    public Socket registerAckListener(Socket.Ack ackListener) {
+        manager.registerAckListener(ackListener);
+        return this;
+    }
+
+    public Socket unregisterAckListener(Socket.Ack ackListener) {
+        manager.unregisterAckListener(ackListener);
+        return this;
+    }
+
     /**
      * 彻底销毁此对象，不再使用
      */
@@ -364,8 +341,8 @@ public class Socket {
         connected = false;
         mEngine.close();
 
-        acks.clear();
-        sendBuffer.clear();
+        manager.removeAcks();
+        packetBuffer.clear();
     }
 
     public Socket fork() {

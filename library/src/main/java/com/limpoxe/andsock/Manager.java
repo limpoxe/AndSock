@@ -1,5 +1,7 @@
 package com.limpoxe.andsock;
 
+import java.util.HashMap;
+import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
@@ -11,9 +13,10 @@ public class Manager {
     private final Socket socket;
     private final Socket.Options options;
     private Socket.Req req;
+    private Socket.Ack ack;
+    private final Map<Integer, Socket.Ack> acks = new HashMap<>();
     private Socket.ConnectStateListener connectStateListener;
     private Socket.HeartBeatListener heartBeatListener;
-
     private int pingTimeoutTimes;
     private ScheduledFuture pingScheduledFuture = null;
     private Runnable pingRunnable = new Runnable() {
@@ -93,6 +96,24 @@ public class Manager {
         this.req = null;
     }
 
+    void registerAckListener(Socket.Ack ackListener) {
+        this.ack = ackListener;
+    }
+
+    void unregisterAckListener(Socket.Ack ackListener) {
+        this.ack = null;
+    }
+
+    void addAck(int reqId, Socket.Ack ack) {
+        if (ack != null) {
+            this.acks.put(reqId, ack);
+        }
+    }
+
+    void removeAcks() {
+        acks.clear();
+    }
+
     private boolean isHeartbeatReq(Packet packet) {
         if ((packet.data == null || packet.data.length == 0)
                 && (options.heartbeatReq == null || options.heartbeatReq.length == 0)) {
@@ -131,6 +152,47 @@ public class Manager {
             } else {
                 LogUtil.log(TAG, "no req callback, ignore!");
             }
+        }
+    }
+
+    boolean dispatchAckArrive(Packet packet) {
+        if (ack != null) {
+            try {
+                ack.onAckArrive(packet);
+            } catch (Exception e) {
+                e.printStackTrace();
+            }
+        }
+        Socket.Ack ack = acks.remove(packet.id);
+        if (ack != null) {
+            try {
+                LogUtil.log(TAG, "trigger ack callback");
+                ack.onAckArrive(packet);
+            } catch (Exception e) {
+                e.printStackTrace();
+                LogUtil.log(TAG, "call onAckArrive cause exception: " + e.getMessage());
+            }
+            return true;
+        } else {
+            LogUtil.log(TAG, "id=" + packet.id + ", no ack callback, ignore!");
+            return false;
+        }
+    }
+
+    boolean dispatchAckTimeout(Packet packet) {
+        Socket.Ack ack = this.acks.remove(packet.id);
+        if (ack != null) {
+            try {
+                LogUtil.log(TAG, "trigger ack timeout callback[" + options.packetTimeout + "], packet=" + packet);
+                ack.onTimeout(packet);
+            } catch (Exception e) {
+                e.printStackTrace();
+                LogUtil.log(TAG, "call onTimeout cause exception: " + e.getMessage());
+            }
+            return true;
+        } else {
+            LogUtil.log(TAG, "id=" + packet.id + ", no ack timeout callback, ignore!");
+            return false;
         }
     }
 
