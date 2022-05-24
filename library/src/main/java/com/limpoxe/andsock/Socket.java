@@ -391,6 +391,7 @@ public class Socket {
         public static final String MODE_CLIENT = "Client";
 
         public static final String PROTOCOL_TCP = "TCP";
+        public static final String PROTOCOL_UDP_UNICAST = "UDP_UNICAST";
         public static final String PROTOCOL_UDP_MULTICAST = "UDP_MULTICAST";
         public static final String PROTOCOL_UDP_CAST = "UDP_CAST";
 

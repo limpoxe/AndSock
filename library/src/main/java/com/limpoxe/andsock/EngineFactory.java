@@ -10,6 +10,8 @@ public class EngineFactory {
             return new UdpMultiCastEngineImpl(options.mode, options.ip, options.localPort, options.remotePort, options.udpBufferSize);
         } else if (Socket.Options.PROTOCOL_UDP_CAST.equals(options.protocol)) {
             return new UdpCastEngineImpl(options.mode, options.ip, options.localPort, options.remotePort, options.udpBufferSize);
+        } else if (Socket.Options.PROTOCOL_UDP_UNICAST.equals(options.protocol)) {
+            return new UdpUniCastEngineImpl(options.mode, options.ip, options.localPort, options.remotePort, options.udpBufferSize);
         }
         return null;
     }
