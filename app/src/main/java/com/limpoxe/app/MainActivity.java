@@ -1,23 +1,24 @@
 package com.limpoxe.app;
 
 import android.os.Bundle;
-import android.os.Handler;
-import android.os.Looper;
 import android.view.View;
 
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.limpoxe.andsock.LogUtil;
-import com.limpoxe.andsock.Packet;
 import com.limpoxe.andsock.Socket;
 
 import org.json.JSONObject;
 
+import java.net.InetAddress;
+
 public class MainActivity extends AppCompatActivity {
+    private static final String TAG = "MainActivity";
+
     private static Socket client = null;
     private static Socket server = null;
-    private static Socket scaner = null;
+    private static Socket multicast = null;
     private static Socket unicast = null;
 
     @Override
@@ -49,20 +50,20 @@ public class MainActivity extends AppCompatActivity {
             server.registerConnectStateChange(new Socket.ConnectStateListener() {
                 @Override
                 public void onConnect() {
-                    System.out.println("Server-Side: onConnect");
+                    LogUtil.log(TAG, "Server-Side: onConnect");
                 }
                 @Override
                 public void onDisconnect() {
-                    System.out.println("Server-Side: onDisconnect");
+                    LogUtil.log(TAG, "Server-Side: onDisconnect");
                 }
             });
             server.registerReqListener(new Socket.Req() {
                 @Override
-                public void onReqArrive(Packet req) {
-                    System.out.println("on Req: " + new String(req.data));
-                    String str = "我很好！";
-                    System.out.println("Ack: " + str);
-                    server.ack(req.id, str.getBytes());
+                public void onReqArrive(int packetId, byte[] data, InetAddress sourceAddress) {
+                    LogUtil.log(TAG, "on Req: " + new String(data));
+                    String str = "tcp ack message";
+                    LogUtil.log(TAG, "Ack: " + str);
+                    server.ack(packetId, str.getBytes());
                 }
             });
             server.connect();
@@ -77,37 +78,35 @@ public class MainActivity extends AppCompatActivity {
             client.registerConnectStateChange(new Socket.ConnectStateListener() {
                 @Override
                 public void onConnect() {
-                    System.out.println("Client-Side: onConnect");
+                    LogUtil.log(TAG, "Client-Side: onConnect");
                 }
                 @Override
                 public void onDisconnect() {
-                    System.out.println("Client-Side: onDisconnect");
+                    LogUtil.log(TAG, "Client-Side: onDisconnect");
                 }
             });
             client.connect();
         }
-        if (scaner == null) {
+        if (multicast == null) {
             Socket.Options options = new Socket.Options();
             options.ip = "239.192.168.1";//239.0.0.0 ~ 239.255.255.255
             options.localPort = 5279;
             options.remotePort = 5279;
             options.protocol = Socket.Options.PROTOCOL_UDP_MULTICAST;
-            options.heartbeatDelay = 0;
             options.udpBufferSize = 512;
-            scaner = new Socket(options);
-            scaner.registerReqListener(new Socket.Req() {
+            multicast = new Socket(options);
+            multicast.registerReqListener(new Socket.Req() {
                 @Override
-                public void onReqArrive(Packet req) {
+                public void onReqArrive(int packetId, byte[] data, InetAddress sourceAddress) {
                     try {
-                        String data = new String(req.data);
-                        JSONObject jsonObject = new JSONObject(data);
+                        JSONObject jsonObject = new JSONObject(new String(data));
                         String cmd = jsonObject.optString("cmd");
                         if ("who".equals(cmd)) {
                             JSONObject response = new JSONObject();
                             response.put("cmd", "who_reply");
                             response.put("name", "Cindy");
                             //组播不支持回调，无ack参数
-                            scaner.send(response.toString().getBytes(), null);
+                            multicast.send(response.toString().getBytes(), null);
                         } else if ("who_reply".equals(cmd)) {
                             LogUtil.log("who_reply", "name=" + jsonObject.optString("name"));
                         }
@@ -116,7 +115,7 @@ public class MainActivity extends AppCompatActivity {
                     }
                 }
             });
-            scaner.connect();
+            multicast.connect();
         }
         if (unicast == null) {
             Socket.Options options = new Socket.Options();
@@ -124,18 +123,16 @@ public class MainActivity extends AppCompatActivity {
             options.localPort = 2795;
             options.remotePort = 2795;
             options.protocol = Socket.Options.PROTOCOL_UDP_UNICAST;
-            options.heartbeatDelay = 0;
             options.udpBufferSize = 256;
             unicast = new Socket(options);
             unicast.registerReqListener(new Socket.Req() {
                 @Override
-                public void onReqArrive(Packet req) {
+                public void onReqArrive(int packetId, byte[] data, InetAddress sourceAddress) {
                     try {
-                        String data = new String(req.data);
-                        LogUtil.log("onReqArrive", "data=" + data);
+                        LogUtil.log("onReqArrive", "data=" + new String(data));
                         String str = "Ack unicast message";
-                        System.out.println("send Ack: " + str);
-                        unicast.ack(req.id, str.getBytes());
+                        LogUtil.log(TAG, "send Ack: " + str);
+                        unicast.ack(sourceAddress.getHostAddress(), packetId, str.getBytes());
                     } catch (Exception e) {
                         e.printStackTrace();
                     }
@@ -146,16 +143,16 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void test1() {
-        String str = "你好？";
-        System.out.println("Req: " + str);
+        String str = "tcp req message";
+        LogUtil.log(TAG, "Req: " + str);
         client.send(str.getBytes(), new Socket.Ack() {
             @Override
-            public void onAckArrive(Packet ack) {
-                System.out.println("on Ack：" + new String(ack.data));
+            public void onAckArrive(int packetId, byte[] data) {
+                LogUtil.log(TAG, "on Ack：" + new String(data));
             }
             @Override
-            public void onTimeout(Packet req) {
-                System.out.println("发包超时");
+            public void onTimeout(int packetId, byte[] data) {
+                LogUtil.log(TAG, "发包超时");
             }
         });
     }
@@ -165,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
             JSONObject jsonObject = new JSONObject();
             jsonObject.put("cmd", "who");
             //组播不支持回调，无ack参数
-            scaner.send(jsonObject.toString().getBytes(), null);
+            multicast.send(jsonObject.toString().getBytes(), null);
         } catch (Exception e) {
             e.printStackTrace();
         }
@@ -173,17 +170,15 @@ public class MainActivity extends AppCompatActivity {
 
     private void test3() {
         String str = "Req unicast message";
-        System.out.println("send Req: " + str);
-        unicast.send(str.getBytes(), new Socket.Ack() {
+        LogUtil.log(TAG, "send Req: " + str);
+        unicast.send("127.0.0.1", str.getBytes(), new Socket.Ack() {
             @Override
-            public void onAckArrive(Packet ack) {
-                String data = new String(ack.data);
-                LogUtil.log("onAckArrive", "data=" + data);
+            public void onAckArrive(int packetId, byte[] data) {
+                LogUtil.log("onAckArrive", "data=" + new String(data));
             }
             @Override
-            public void onTimeout(Packet req) {
-                String data = new String(req.data);
-                LogUtil.log("onTimeout", "data=" + data);
+            public void onTimeout(int packetId, byte[] data) {
+                LogUtil.log("onTimeout", "data=" + new String(data));
             }
         });
     }
