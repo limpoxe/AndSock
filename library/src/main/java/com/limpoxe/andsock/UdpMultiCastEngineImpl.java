@@ -57,14 +57,18 @@ public class UdpMultiCastEngineImpl implements Engine {
                 LogUtil.log(TAG, " write fail " + len + " > " + datagramPacketLen);
                 return false;
             }
+            if (address == null) {
+                LogUtil.log(TAG, " fatal error remote address not set!! ");
+                return false;
+            }
             byte[] bytes = new byte[datagramPacketLen];
             System.arraycopy(b, off, bytes, 0, len);
             socket.send(new DatagramPacket(bytes, 0, datagramPacketLen, inetAddress, remotePort));
+            return true;
         } catch (Exception e) {
             LogUtil.log(TAG, " write fail " + e.getMessage());
-            return false;
         }
-        return true;
+        return false;
     }
 
     public int read(byte b[], int off, int len, InetAddress[] addressHolder) {

@@ -70,18 +70,22 @@ public class TcpEngineImpl implements Engine {
             if (outputStream != null) {
                 outputStream.write(b, off, len);
                 outputStream.flush();
+                return true;
+            } else {
+                LogUtil.log(TAG, " write fail outputStream is null");
             }
         } catch (IOException e) {
             LogUtil.log(TAG, " write fail " + e.getMessage());
-            return false;
         }
-        return true;
+        return false;
     }
 
     public int read(byte b[], int off, int len, InetAddress[] addressesHolder) {
         try {
             if (inputStream != null) {
                 return inputStream.read(b, off, len);
+            } else {
+                LogUtil.log(TAG, " read fail inputStream is null");
             }
         } catch (IOException e) {
             LogUtil.log(TAG, " read fail " + e.getMessage());

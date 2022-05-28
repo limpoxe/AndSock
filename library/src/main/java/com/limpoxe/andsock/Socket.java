@@ -123,8 +123,10 @@ public class Socket {
                 LogUtil.log(TAG, "Packet read thread done");
 
                 LogUtil.log(TAG, "Try ping (to trigger disconnect event)");
-                send(options.heartbeatReq, null);
-                send(options.heartbeatReq, null);
+                if (Socket.Options.PROTOCOL_TCP.equals(options.protocol)) {
+                    send(options.heartbeatReq, null);
+                    send(options.heartbeatReq, null);
+                }
             }
         });
     }
