@@ -3,6 +3,7 @@ package com.limpoxe.andsock;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.Socket;
 
 public class TcpEngineImpl implements Engine {
@@ -64,7 +65,7 @@ public class TcpEngineImpl implements Engine {
         }
     }
 
-    public boolean write(byte b[], int off, int len) {
+    public boolean write(byte b[], int off, int len, InetAddress address) {
         try {
             if (outputStream != null) {
                 outputStream.write(b, off, len);
@@ -77,7 +78,7 @@ public class TcpEngineImpl implements Engine {
         return true;
     }
 
-    public int read(byte b[], int off, int len) {
+    public int read(byte b[], int off, int len, InetAddress[] addressesHolder) {
         try {
             if (inputStream != null) {
                 return inputStream.read(b, off, len);

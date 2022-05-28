@@ -1,11 +1,14 @@
 package com.limpoxe.andsock;
 
+import java.net.InetAddress;
+
 public class Packet {
     private static final String TAG = "Packet";
 
     public static final int TYPE_REQ = 0;
     public static final int TYPE_ACK = 1;
 
+    public static final int HEAD_LENGTH = 4 + 1 + 4;
     //必须 包总长度
     final int length;
     //必须 包类型，是请求包还是ACK包
@@ -15,8 +18,11 @@ public class Packet {
     //非必须 数据
     public final byte[] data;
 
+    //透传给引擎的参数
+    public InetAddress inetAddress;
+
     public Packet(int type, int id, byte[] data) {
-        this.length = 4 + 1 + 4 + (data==null?0:data.length);
+        this.length = HEAD_LENGTH + (data==null?0:data.length);
         if (Byte.MIN_VALUE <= type && type <= Byte.MAX_VALUE) {
             this.type = type;
         } else {
@@ -74,7 +80,7 @@ public class Packet {
         //数据
         if (packet.data != null) {
             for (int i = 0; i < packet.data.length; i++) {
-                pak[i + 9] = packet.data[i];
+                pak[i + HEAD_LENGTH] = packet.data[i];
             }
         }
 
@@ -82,7 +88,7 @@ public class Packet {
     }
 
     public static Packet unpack(byte[] pak) {
-        if (pak.length < 9) {
+        if (pak.length < HEAD_LENGTH) {
             LogUtil.log(TAG, "unpack fail, null");
             return null;
         }
@@ -115,12 +121,15 @@ public class Packet {
         int id = ByteOrder.byte4ToIntB(idByte);
 
         //数据
-        byte[] data = new byte[pak.length - 9];
+        byte[] data = new byte[pak.length - HEAD_LENGTH];
         for (int i = 0; i < data.length; i++) {
-            data[i] = pak[i + 9];
+            data[i] = pak[i + HEAD_LENGTH];
         }
 
         return new Packet(type, id, data);
     }
 
+    public static int unpackLength(byte[] pak) {
+        return ByteOrder.byte4ToIntB(pak);
+    }
 }

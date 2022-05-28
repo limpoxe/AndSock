@@ -7,18 +7,16 @@ import java.net.InetAddress;
 public class UdpCastEngineImpl implements Engine {
     private static final String TAG = "UdpCastEngineImpl";
 
-    private final String mode;
     private final String ip;
     private int localPort;
     private int remotePort;
     private final int datagramPacketLen ;
 
     private DatagramSocket socket;
-    private InetAddress inetAddress;
+    private InetAddress defaultInetAddress;
 
-    public UdpCastEngineImpl(String mode, String ip, int localPort, int remotePort, int bufferSize) {
-        this.mode = mode;
-        this.ip = "255.255.255.255";
+    public UdpCastEngineImpl(String ip, int localPort, int remotePort, int bufferSize) {
+        this.ip = ip;
         this.localPort = localPort;
         this.remotePort = remotePort;
         this.datagramPacketLen = bufferSize;
@@ -26,8 +24,13 @@ public class UdpCastEngineImpl implements Engine {
 
     public boolean open() {
         try {
+            if (ip != null) {
+                defaultInetAddress = InetAddress.getByName(ip);
+            }
+        } catch (Exception e) {
+        }
+        try {
             socket = new DatagramSocket(localPort);
-            inetAddress = InetAddress.getByName(ip);
             LogUtil.log(TAG, "ReceiveBufferSize=" + socket.getReceiveBufferSize() + " SendBufferSize=" + socket.getSendBufferSize() + " SoTimeout=" + socket.getSoTimeout());
         } catch (Exception e) {
             LogUtil.log(TAG, " open fail " + e.getMessage());
@@ -51,7 +54,7 @@ public class UdpCastEngineImpl implements Engine {
         }
     }
 
-    public boolean write(byte b[], int off, int len) {
+    public boolean write(byte b[], int off, int len, InetAddress address) {
         try {
             if (len > datagramPacketLen) {
                 LogUtil.log(TAG, " write fail " + len + " > " + datagramPacketLen);
@@ -59,7 +62,7 @@ public class UdpCastEngineImpl implements Engine {
             }
             byte[] bytes = new byte[datagramPacketLen];
             System.arraycopy(b, off, bytes, 0, len);
-            socket.send(new DatagramPacket(bytes, 0, datagramPacketLen, inetAddress, remotePort));
+            socket.send(new DatagramPacket(bytes, 0, datagramPacketLen, defaultInetAddress!=null?defaultInetAddress:address, remotePort));
         } catch (Exception e) {
             LogUtil.log(TAG, " write fail " + e.getMessage());
             return false;
@@ -67,9 +70,11 @@ public class UdpCastEngineImpl implements Engine {
         return true;
     }
 
-    public int read(byte b[], int off, int len) {
+    public int read(byte b[], int off, int len, InetAddress[] addressHolder) {
         try {
-            socket.receive(new DatagramPacket(b, off, len));
+            DatagramPacket datagramPacket = new DatagramPacket(b, off, len);
+            socket.receive(datagramPacket);
+            addressHolder[0] = datagramPacket.getAddress();
             return len;
         } catch (Exception e) {
             LogUtil.log(TAG, " read fail " + e.getMessage());

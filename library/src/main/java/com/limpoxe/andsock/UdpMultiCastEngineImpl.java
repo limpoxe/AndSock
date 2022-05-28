@@ -7,7 +7,6 @@ import java.net.MulticastSocket;
 public class UdpMultiCastEngineImpl implements Engine {
     private static final String TAG = "UdpMultiCastEngineImpl";
 
-    private final String mode;
     private final String ip;
     private int localPort;
     private int remotePort;
@@ -16,8 +15,7 @@ public class UdpMultiCastEngineImpl implements Engine {
     private MulticastSocket socket;
     private InetAddress inetAddress;
 
-    public UdpMultiCastEngineImpl(String mode, String ip, int localPort, int remotePort, int bufferSize) {
-        this.mode = mode;
+    public UdpMultiCastEngineImpl(String ip, int localPort, int remotePort, int bufferSize) {
         this.ip = ip;//239.0.0.0 ~ 239.255.255.255
         this.localPort = localPort;
         this.remotePort = remotePort;
@@ -53,7 +51,7 @@ public class UdpMultiCastEngineImpl implements Engine {
         }
     }
 
-    public boolean write(byte b[], int off, int len) {
+    public boolean write(byte b[], int off, int len, InetAddress address) {
         try {
             if (len > datagramPacketLen) {
                 LogUtil.log(TAG, " write fail " + len + " > " + datagramPacketLen);
@@ -69,9 +67,11 @@ public class UdpMultiCastEngineImpl implements Engine {
         return true;
     }
 
-    public int read(byte b[], int off, int len) {
+    public int read(byte b[], int off, int len, InetAddress[] addressHolder) {
         try {
-            socket.receive(new DatagramPacket(b, off, len));
+            DatagramPacket datagramPacket = new DatagramPacket(b, off, len);
+            socket.receive(datagramPacket);
+            addressHolder[0] = datagramPacket.getAddress();
             return len;
         } catch (Exception e) {
             LogUtil.log(TAG, " read fail " + e.getMessage());

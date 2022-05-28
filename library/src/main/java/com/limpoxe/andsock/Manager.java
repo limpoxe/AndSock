@@ -13,7 +13,6 @@ public class Manager {
     private final Socket socket;
     private final Socket.Options options;
     private Socket.Req req;
-    private Socket.Ack0 ack;
     private final Map<Integer, Socket.Ack> acks = new HashMap<>();
     private Socket.ConnectStateListener connectStateListener;
     private Socket.HeartBeatListener heartBeatListener;
@@ -27,7 +26,7 @@ public class Manager {
                 LogUtil.log(TAG, "send heartbeat req[" + options.heartbeatDelay + "]");
                 socket.send(options.heartbeatReq, new Socket.Ack() {
                     @Override
-                    public void onAckArrive(Packet ack) {
+                    public void onAckArrive(int packetId, byte[] data) {
                         pingTimeoutTimes = 0;
                         LogUtil.log(TAG, "heartbeat success");
                         if (heartBeatListener != null) {
@@ -35,7 +34,7 @@ public class Manager {
                         }
                     }
                     @Override
-                    public void onTimeout(Packet req) {
+                    public void onTimeout(int packetId, byte[] data) {
                         pingTimeoutTimes++;
                         LogUtil.log(TAG, "heartbeat timeout, count=" + pingTimeoutTimes);
                         if (heartBeatListener != null) {
@@ -96,14 +95,6 @@ public class Manager {
         this.req = null;
     }
 
-    void registerAckListener(Socket.Ack0 ackListener) {
-        this.ack = ackListener;
-    }
-
-    void unregisterAckListener(Socket.Ack0 ackListener) {
-        this.ack = null;
-    }
-
     void addAck(int reqId, Socket.Ack ack) {
         if (ack != null) {
             this.acks.put(reqId, ack);
@@ -134,7 +125,7 @@ public class Manager {
     }
 
     void onReqArrive(Packet packet) {
-        if (isHeartbeatReq(packet)) {
+        if (Socket.Options.PROTOCOL_TCP.equals(options.protocol) && isHeartbeatReq(packet)) {
             LogUtil.log(TAG, "heartbeat, Auto-Ack!");
             socket.ack(packet.id, options.heartbeatAck);
             if (heartBeatListener != null) {
@@ -144,7 +135,7 @@ public class Manager {
             if (req != null) {
                 try {
                     LogUtil.log(TAG, "trigger req callback");
-                    req.onReqArrive(packet);
+                    req.onReqArrive(packet.id, packet.data, packet.inetAddress);
                 } catch (Exception e) {
                     e.printStackTrace();
                     LogUtil.log(TAG, "call onReqArrive cause exception: " + e.getMessage());
@@ -156,27 +147,18 @@ public class Manager {
     }
 
     boolean dispatchAckArrive(Packet packet) {
-        if (ack != null) {
-            try {
-                ack.onAckArrive(packet);
-            } catch (Exception e) {
-                e.printStackTrace();
-            }
-        }
         Socket.Ack ack = acks.remove(packet.id);
         if (ack != null) {
             try {
                 LogUtil.log(TAG, "trigger ack callback");
-                ack.onAckArrive(packet);
+                ack.onAckArrive(packet.id, packet.data);
             } catch (Exception e) {
                 e.printStackTrace();
                 LogUtil.log(TAG, "call onAckArrive cause exception: " + e.getMessage());
             }
             return true;
-        } else {
-            LogUtil.log(TAG, "id=" + packet.id + ", no ack callback, ignore!");
-            return false;
         }
+        return false;
     }
 
     boolean dispatchAckTimeout(Packet packet) {
@@ -184,16 +166,14 @@ public class Manager {
         if (ack != null) {
             try {
                 LogUtil.log(TAG, "trigger ack timeout callback[" + options.packetTimeout + "], packet=" + packet);
-                ack.onTimeout(packet);
+                ack.onTimeout(packet.id, packet.data);
             } catch (Exception e) {
                 e.printStackTrace();
                 LogUtil.log(TAG, "call onTimeout cause exception: " + e.getMessage());
             }
             return true;
-        } else {
-            LogUtil.log(TAG, "id=" + packet.id + ", no ack timeout callback, ignore!");
-            return false;
         }
+        return false;
     }
 
     void onConnect() {
@@ -201,7 +181,7 @@ public class Manager {
         //重置重连次数
         autoConnectRetryTimes = 0;
         //启动心跳定时器
-        if (pingScheduledFuture == null && options.heartbeatDelay > 0) {
+        if (pingScheduledFuture == null && Socket.Options.PROTOCOL_TCP.equals(options.protocol) && options.heartbeatDelay > 0) {
             pingScheduledFuture = Timer.scheduleAtFixedRate(pingRunnable, 0, options.heartbeatDelay, TimeUnit.MILLISECONDS);
         }
         if (connectStateListener != null) {

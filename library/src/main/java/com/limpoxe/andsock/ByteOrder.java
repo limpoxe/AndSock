@@ -48,4 +48,22 @@ public class ByteOrder {
         b[1] = (byte) (i & 0xFF);
         return b;
     }
+
+    public static byte[] ipv4ToByte4(String ipv4) {
+        String[] ipArr = ipv4.split("\\.");
+        byte[] ret = new byte[4];
+        ret[0] = (byte) (Integer.parseInt(ipArr[0]) & 0xFF);
+        ret[1] = (byte) (Integer.parseInt(ipArr[1]) & 0xFF);
+        ret[2] = (byte) (Integer.parseInt(ipArr[2]) & 0xFF);
+        ret[3] = (byte) (Integer.parseInt(ipArr[3]) & 0xFF);
+        return ret;
+    }
+
+    public static String byte4ToIpv4(byte[] b) {
+       return new StringBuilder()
+                .append(b[0] & 0xFF).append('.')
+                .append(b[1] & 0xFF).append('.')
+                .append(b[2] & 0xFF).append('.')
+                .append(b[3] & 0xFF).toString();
+    }
 }

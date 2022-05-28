@@ -1,6 +1,8 @@
 package com.limpoxe.andsock;
 
 import java.io.ByteArrayOutputStream;
+import java.net.InetAddress;
+import java.net.UnknownHostException;
 import java.util.LinkedList;
 import java.util.Queue;
 import java.util.concurrent.Executors;
@@ -41,7 +43,7 @@ public class Socket {
                     manager.onConnect();
                 } else {
                     Engine engine = EngineFactory.newEngine(options);
-                    if (engine.open()) {
+                    if (engine != null && engine.open()) {
                         sid++;
                         LogUtil.log(TAG, "Engine opened, sid=" + sid);
 
@@ -82,11 +84,12 @@ public class Socket {
                 byte[] buf = new byte[mEngine.getReadBufferLen()];
                 int dataLen = 0;
                 int readLen = 0;
-                while ((readLen = mEngine.read(buf, 0, buf.length)) != -1) {
+                final InetAddress[] address = new InetAddress[1];
+                while ((readLen = mEngine.read(buf, 0, buf.length, address)) != -1) {
                     try {
                         bos.write(buf, 0, readLen);
                         if (dataLen == 0 && bos.size() >= 4) {
-                            dataLen = ByteOrder.byte4ToIntB(bos.toByteArray());
+                            dataLen = Packet.unpackLength(bos.toByteArray());
                         }
                         if (dataLen != 0 && bos.size() >= dataLen) {
                             LogUtil.log(TAG, "Packet arrived ");
@@ -97,6 +100,8 @@ public class Socket {
                                 packetBytes = packetBytesTemp;
                             }
                             Packet packet = Packet.unpack(packetBytes);
+                            packet.inetAddress = address[0];
+                            address[0] = null;
                             bos.reset();
                             dataLen = 0;
 
@@ -136,12 +141,30 @@ public class Socket {
     }
 
     public Socket send(final byte[] data, final Ack ack) {
+        return send(null, data, ack);
+    }
+
+    public Socket send(final String ipV4, final byte[] data, final Ack ack) {
         WriteThread.exec(new Runnable() {
             @Override
             public void run() {
                 LogUtil.log(TAG, "send req, id=" + packetSeqId);
                 Packet packet = new Packet(Packet.TYPE_REQ, packetSeqId, data);
-                manager.addAck(packetSeqId, ack);
+                if (ipV4 != null) {
+                    try {
+                        packet.inetAddress = InetAddress.getByName(ipV4);
+                    } catch (UnknownHostException e) {
+                        e.printStackTrace();
+                        LogUtil.log(TAG, "InetAddress not support: " + ipV4);
+                    }
+                }
+                if (options.isSupportAck() && ack != null) {
+                    manager.addAck(packetSeqId, ack);
+                } else {
+                    if (ack != null) {
+                        LogUtil.log(TAG, "Ack not support with protocol " + options.protocol);
+                    }
+                }
                 if (packetSeqId == Integer.MAX_VALUE) {
                     packetSeqId = 0;
                 } else {
@@ -150,7 +173,7 @@ public class Socket {
 
                 if (Socket.this.connected) {
                     write(packet);
-                    if (ack != null) {
+                    if (options.isSupportAck() && ack != null) {
                         ackTimeout(packet);
                     }
                 } else {
@@ -172,14 +195,24 @@ public class Socket {
         }
     }
 
-    public Socket ack(int id, byte[] data) {
+    public Socket ack(final int id, final byte[] data) {
+        return ack(null, id, data);
+    }
+
+    public Socket ack(final String ipV4, final int id, final byte[] data) {
         WriteThread.exec(new Runnable() {
             @Override
             public void run() {
                 LogUtil.log(TAG, "send ack, id=" + id);
-
                 Packet packet = new Packet(Packet.TYPE_ACK, id, data);
-
+                if (ipV4 != null) {
+                    try {
+                        packet.inetAddress = InetAddress.getByName(ipV4);
+                    } catch (UnknownHostException e) {
+                        e.printStackTrace();
+                        LogUtil.log(TAG, "InetAddress not support: " + ipV4);
+                    }
+                }
                 if (Socket.this.connected) {
                     write(packet);
                 } else {
@@ -245,7 +278,7 @@ public class Socket {
         LogUtil.log(TAG, "write, packet=" + packet);
         byte[] pak = Packet.pack(packet);
         if (pak != null && pak.length > 0) {
-            boolean ret = mEngine.write(pak, 0, pak.length);
+            boolean ret = mEngine.write(pak, 0, pak.length, packet.inetAddress);
             if (!ret) {
                 LogUtil.log(TAG, "write packet fail");
                 LogUtil.log(TAG, "try disconnect");
@@ -320,16 +353,6 @@ public class Socket {
         return this;
     }
 
-    public Socket registerAckListener(Socket.Ack0 ackListener) {
-        manager.registerAckListener(ackListener);
-        return this;
-    }
-
-    public Socket unregisterAckListener(Socket.Ack0 ackListener) {
-        manager.unregisterAckListener(ackListener);
-        return this;
-    }
-
     /**
      * 彻底销毁此对象，不再使用
      */
@@ -360,15 +383,15 @@ public class Socket {
     }
 
     public static interface Req {
-        void onReqArrive(Packet req);
+        void onReqArrive(int packetId, byte[] data, InetAddress sourceAddress);
     }
 
     public static interface Ack0 {
-        public void onAckArrive(Packet ack);
+        public void onAckArrive(int packetId, byte[] data);
     }
 
     public static interface Ack extends Ack0 {
-        public void onTimeout(Packet req);
+        public void onTimeout(int packetId, byte[] data);
     }
 
     public static class Options {
@@ -403,6 +426,11 @@ public class Socket {
         public byte[] heartbeatReq;
         public byte[] heartbeatAck;
         public Options() {
+        }
+
+        public boolean isSupportAck() {
+            return Options.PROTOCOL_TCP.equals(protocol)
+                    || Options.PROTOCOL_UDP_UNICAST.equals(protocol);
         }
     }
 }
