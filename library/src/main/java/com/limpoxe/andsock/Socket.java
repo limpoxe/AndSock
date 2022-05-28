@@ -389,11 +389,11 @@ public class Socket {
     }
 
     public static interface Ack0 {
-        public void onAckArrive(int packetId, byte[] data);
+        public void onAckArrive(byte[] data);
     }
 
     public static interface Ack extends Ack0 {
-        public void onTimeout(int packetId, byte[] data);
+        public void onTimeout(byte[] data);
     }
 
     public static class Options {

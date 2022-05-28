@@ -26,7 +26,7 @@ public class Manager {
                 LogUtil.log(TAG, "send heartbeat req[" + options.heartbeatDelay + "]");
                 socket.send(options.heartbeatReq, new Socket.Ack() {
                     @Override
-                    public void onAckArrive(int packetId, byte[] data) {
+                    public void onAckArrive(byte[] data) {
                         pingTimeoutTimes = 0;
                         LogUtil.log(TAG, "heartbeat success");
                         if (heartBeatListener != null) {
@@ -34,7 +34,7 @@ public class Manager {
                         }
                     }
                     @Override
-                    public void onTimeout(int packetId, byte[] data) {
+                    public void onTimeout(byte[] data) {
                         pingTimeoutTimes++;
                         LogUtil.log(TAG, "heartbeat timeout, count=" + pingTimeoutTimes);
                         if (heartBeatListener != null) {
@@ -151,7 +151,7 @@ public class Manager {
         if (ack != null) {
             try {
                 LogUtil.log(TAG, "trigger ack callback");
-                ack.onAckArrive(packet.id, packet.data);
+                ack.onAckArrive(packet.data);
             } catch (Exception e) {
                 e.printStackTrace();
                 LogUtil.log(TAG, "call onAckArrive cause exception: " + e.getMessage());
@@ -166,7 +166,7 @@ public class Manager {
         if (ack != null) {
             try {
                 LogUtil.log(TAG, "trigger ack timeout callback[" + options.packetTimeout + "], packet=" + packet);
-                ack.onTimeout(packet.id, packet.data);
+                ack.onTimeout(packet.data);
             } catch (Exception e) {
                 e.printStackTrace();
                 LogUtil.log(TAG, "call onTimeout cause exception: " + e.getMessage());
