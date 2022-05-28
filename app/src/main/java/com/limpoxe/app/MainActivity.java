@@ -147,11 +147,11 @@ public class MainActivity extends AppCompatActivity {
         LogUtil.log(TAG, "Req: " + str);
         client.send(str.getBytes(), new Socket.Ack() {
             @Override
-            public void onAckArrive(int packetId, byte[] data) {
+            public void onAckArrive(byte[] data) {
                 LogUtil.log(TAG, "on Ack：" + new String(data));
             }
             @Override
-            public void onTimeout(int packetId, byte[] data) {
+            public void onTimeout(byte[] data) {
                 LogUtil.log(TAG, "发包超时");
             }
         });
@@ -173,11 +173,11 @@ public class MainActivity extends AppCompatActivity {
         LogUtil.log(TAG, "send Req: " + str);
         unicast.send("127.0.0.1", str.getBytes(), new Socket.Ack() {
             @Override
-            public void onAckArrive(int packetId, byte[] data) {
+            public void onAckArrive(byte[] data) {
                 LogUtil.log("onAckArrive", "data=" + new String(data));
             }
             @Override
-            public void onTimeout(int packetId, byte[] data) {
+            public void onTimeout(byte[] data) {
                 LogUtil.log("onTimeout", "data=" + new String(data));
             }
         });
