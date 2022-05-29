@@ -94,26 +94,27 @@ public class Socket {
                         if (dataLen != 0 && bos.size() >= dataLen) {
                             LogUtil.log(TAG, "Packet arrived ");
                             byte[] packetBytes = bos.toByteArray();
+                            bos.reset();
                             if (packetBytes.length > dataLen) {
                                 byte[] packetBytesTemp = new byte[dataLen];
                                 System.arraycopy(packetBytes, 0, packetBytesTemp, 0, dataLen);
                                 packetBytes = packetBytesTemp;
                             }
-                            Packet packet = Packet.unpack(packetBytes);
-                            packet.inetAddress = address[0];
-                            address[0] = null;
-                            bos.reset();
                             dataLen = 0;
-
+                            Packet packet = Packet.unpack(packetBytes);
                             if (packet != null) {
+                                packet.inetAddress = address[0];
                                 if (packet.type == Packet.TYPE_REQ) {
                                     onReq(packet);
                                 } else if (packet.type == Packet.TYPE_ACK) {
                                     onAck(packet);
+                                } else {
+                                    LogUtil.log(TAG, "Packet type is unknown!");
                                 }
                             } else {
                                 LogUtil.log(TAG, "Packet unpack fail，should not happen！ ");
                             }
+                            address[0] = null;
                         }
                     } catch (Exception e) {
                         e.printStackTrace();

@@ -5,14 +5,15 @@ import java.net.InetAddress;
 public class Packet {
     private static final String TAG = "Packet";
 
-    public static final int TYPE_REQ = 0;
-    public static final int TYPE_ACK = 1;
-
     public static final int HEAD_LENGTH = 4 + 1 + 4;
+
+    public static final byte TYPE_REQ = 0;
+    public static final byte TYPE_ACK = 1;
+
     //必须 包总长度
     final int length;
     //必须 包类型，是请求包还是ACK包
-    public final int type;
+    public final byte type;
     //必须 包id 由发包侧随机生成，在发包侧确保唯一性，作为回包依据
     public final int id;
     //非必须 数据
@@ -21,13 +22,9 @@ public class Packet {
     //透传给引擎的参数
     public InetAddress inetAddress;
 
-    public Packet(int type, int id, byte[] data) {
+    public Packet(byte type, int id, byte[] data) {
         this.length = HEAD_LENGTH + (data==null?0:data.length);
-        if (Byte.MIN_VALUE <= type && type <= Byte.MAX_VALUE) {
-            this.type = type;
-        } else {
-            throw new IllegalArgumentException("type outOfRange: " + type);
-        }
+        this.type = type;
         this.id = id;
         this.data = data;
 
@@ -68,7 +65,7 @@ public class Packet {
         pak[3] = len[3];
 
         //1个字节 包类型
-        pak[4] = (byte)packet.type;
+        pak[4] = packet.type;
 
         //4个字节 包序号
         byte[] idByte = ByteOrder.intToByte4B(packet.id);
@@ -80,7 +77,7 @@ public class Packet {
         //数据
         if (packet.data != null) {
             for (int i = 0; i < packet.data.length; i++) {
-                pak[i + HEAD_LENGTH] = packet.data[i];
+                pak[HEAD_LENGTH + i] = packet.data[i];
             }
         }
 
@@ -106,7 +103,7 @@ public class Packet {
         }
 
         //1个字节 包类型
-        int type = (int)pak[4];
+        byte type = pak[4];
         if (type != Packet.TYPE_REQ && type != Packet.TYPE_ACK) {
             LogUtil.log(TAG, "unpack fail, type=" + type);
             return null;
@@ -130,6 +127,12 @@ public class Packet {
     }
 
     public static int unpackLength(byte[] pak) {
-        return ByteOrder.byte4ToIntB(pak);
+        byte[] len = new byte[4];
+        len[0] = pak[0];
+        len[1] = pak[1];
+        len[2] = pak[2];
+        len[3] = pak[3];
+        int packetLen = ByteOrder.byte4ToIntB(len);
+        return packetLen;
     }
 }
